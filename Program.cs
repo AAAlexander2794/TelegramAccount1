@@ -11,7 +11,10 @@ using TLSharp.Core;
 
 Console.WriteLine("======================================");
 
-await Telegram.MyTask();
+
+Telegram.MyTask();
+
+Thread.Sleep(3000);
 
 
 
