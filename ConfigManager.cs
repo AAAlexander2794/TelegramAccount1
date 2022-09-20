@@ -22,6 +22,9 @@ namespace ConsoleApp2
         public string UserNameTo { get; set; }
     }
 
+    /// <summary>
+    /// Класс работы с файлом конфигурации
+    /// </summary>
     static class ConfigManager
     {
         public static Configuration Config { get; }
@@ -40,17 +43,22 @@ namespace ConsoleApp2
             }
             catch
             {
+                // Значения по умолчанию
                 Config.ApiId = 10000001;
                 Config.ApiHash = "abc";
                 Config.PhoneNumber = "+70000000001";
                 Config.Code = "10001";
                 Config.UserNameFrom = "UserFrom";
                 Config.UserNameTo = "UserTo";
+                //
                 WriteConfig();
                 Console.WriteLine("Файл Config.xml создан. Заполните его данными и перезапустите программу");
             }
         }
 
+        /// <summary>
+        /// Записывает в файл конфиг текущую конфигурацию
+        /// </summary>
         static void WriteConfig()
         {
             System.Xml.Serialization.XmlSerializer writer =

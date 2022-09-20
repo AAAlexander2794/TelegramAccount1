@@ -16,15 +16,21 @@ namespace ConsoleApp2
 
         static string ApiHash { get; }
 
-        static TelegramClient Client { get; }
+        static string PhoneNumber { get; }
+
+        static string Code { get; }
+
+        static string UsernameFrom { get; }
+
+        static string UsernameTo { get; }
+
+        public static TelegramClient Client { get; }
 
         static TLUser UserFrom { get; set; }
 
         static TLUser UserTo { get; set; }
 
-        static string PhoneNumber { get; }
-
-        static string Code { get; }
+        static string AuthHash { get; set; }
 
         static Telegram()
         {
@@ -36,11 +42,11 @@ namespace ConsoleApp2
                 ApiHash = config.ApiHash;
                 PhoneNumber = config.PhoneNumber;
                 Code = config.Code;
-                //
-                Client = new TelegramClient(ApiId, ApiHash);
-                ConnectAsync();
-                // *** Здесь должна происходить авторизация
-                //
+                UsernameFrom = config.UserNameFrom;
+                UsernameTo = config.UserNameTo;
+                // Записываем адрес сессии, чтобы можно было чекнуть авторизацию
+                var store = new FileSessionStore();
+                Client = new TelegramClient(ApiId, ApiHash, store, "session");
             }
             catch
             {
@@ -48,18 +54,44 @@ namespace ConsoleApp2
             }
         }
 
-        static async void ConnectAsync()
+        public static async Task ConnectAsync()
         {
             await Client.ConnectAsync();
         }
-       
-        static async void AuthAsync()
+
+        /// <summary>
+        /// Проверка авторизации (для этого надо, чтобы <see cref="Client"/> был создан с указанием <see cref="ISessionStore"/> и названия)
+        /// </summary>
+        /// <returns></returns>
+        public static bool IsUserAuth()
         {
-            var hash = await Client.SendCodeRequestAsync("+79185351854");
-            var code = "26513"; // you can change code in debugger
-            var t = Console.ReadLine();
-            code = t;
-            var user = await Client.MakeAuthAsync("+79185351854", hash, code);
+            return Client.IsUserAuthorized();
+        }
+       
+        /// <summary>
+        /// Запрос кода с телефона
+        /// </summary>
+        public static async Task AuthRequestAsync()
+        {
+            AuthHash = await Client.SendCodeRequestAsync(PhoneNumber);
+        }
+
+        /// <summary>
+        /// Авторизация по коду с телефона, требует сначала выполнения запроса на получение кода <see cref="AuthRequestAsync"/>
+        /// </summary>
+        /// <param name="code">Код с телефона</param>
+        public static async Task AuthAsync(string code)
+        {
+            await Client.MakeAuthAsync(PhoneNumber, AuthHash, code);
+        }
+
+        /// <summary>
+        /// Устанавливает пользователя-отправителя и пользователя-реципиента из файла конфигурации.
+        /// </summary>
+        /// <returns></returns>
+        public static async Task SetUsersAsync()
+        {
+            await SetUsersAsync(UsernameFrom, UsernameTo);
         }
 
         /// <summary>
@@ -67,7 +99,7 @@ namespace ConsoleApp2
         /// </summary>
         /// <param name="usernameFrom"></param>
         /// <param name="usernameTo"></param>
-        static async void SetUsersAsync(string usernameFrom, string usernameTo)
+        public static async Task SetUsersAsync(string usernameFrom, string usernameTo)
         {
             var result = await Client.GetContactsAsync(); //overflow error?
             //
@@ -92,12 +124,9 @@ namespace ConsoleApp2
             await Client.SendMessageAsync(new TLInputPeerUser() { UserId = user.Id }, text);
         }
 
-        public static async void MyTask()
+        public static async Task GetUnreadMessgaes()
         {
-            var config = ConfigManager.Config;
-            // Присваиваем пользователей, с которыми будем работать
-            SetUsersAsync(config.UserNameFrom, config.UserNameTo);
-            //
+                        //
             var dialogs = await Client.GetUserDialogsAsync() as TLDialogsSlice;
             //var users = dialogs.Users.ToList();
             // Получать будем сообщения от UserFrom
@@ -110,8 +139,8 @@ namespace ConsoleApp2
             foreach (var dia in dialogs.Dialogs.Where(x => x.UnreadCount > 0))
             {
                 TLPeerUser peer = dia.Peer as TLPeerUser;
-                //if (peer == null || peer.UserId != target.UserId) continue;
-                
+                if (peer == null || peer.UserId != target.UserId) continue;
+
                 var hist = await Client.GetHistoryAsync(target, 0, -1, 0, dia.UnreadCount);
                 var some2 = (TLMessagesSlice)hist;
                 string text = "";
