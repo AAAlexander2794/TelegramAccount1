@@ -11,6 +11,7 @@ using TLSharp.Core;
 
 Console.WriteLine("======================================");
 
+// Блок первичного подключения
 try
 {
     await Telegram.ConnectAsync();
@@ -22,6 +23,7 @@ catch
     Thread.Sleep(5000);
     Environment.Exit(0);
 }
+// Блок авторизации
 var isAuth = Telegram.Client.IsUserAuthorized();
 if (!isAuth)
 {
@@ -49,9 +51,22 @@ else
 {
     Console.WriteLine("Authorized.");
 }
+// Получить ссылки на пользователей, указанных в конфигурации
 await Telegram.SetUsersAsync();
-await Telegram.GetUnreadMessgaes();
-
+//
+while (true)
+{
+    // Получить непрочитанные сообщения от указанного юзера
+    await Telegram.GetUnreadMessages();
+    // Отправить указанному юзеру непрочитанные сообщения указанного юзера
+    await Telegram.SendUnreadMessages();
+    // Вывести непрочитанные сообщения в консоль
+    Telegram.ShowMessages();
+    //
+    Console.WriteLine("---------------------------------");
+    // Задержка, чтобы не спамить
+    Thread.Sleep(5000);
+}
 
 
 Console.WriteLine("======================================");
