@@ -7,19 +7,37 @@ using System.Threading.Tasks;
 
 namespace ConsoleApp2
 {
-    public class Configuration
+    public class ConfigInfo
     {
+        /// <summary>
+        /// Идентификатор приложения Телеграм
+        /// </summary>
         public int ApiId { get; set; }
 
+        /// <summary>
+        /// Хэш приложения Телеграм
+        /// </summary>
         public string ApiHash { get; set; }
 
+        /// <summary>
+        /// Номер телефона
+        /// </summary>
         public string PhoneNumber { get; set; }
 
-        public string Code { get; set; }
+        /// <summary>
+        /// Имя пользователя в Телеграм, от которого получаем сообщения
+        /// </summary>
+        public string UsernameFrom { get; set; }
 
-        public string UserNameFrom { get; set; }
+        /// <summary>
+        /// Имя пользователя в Телеграм, которому отправляем сообщения
+        /// </summary>
+        public string UsernameTo { get; set; }
 
-        public string UserNameTo { get; set; }
+        /// <summary>
+        /// Флаг чтения от всех пользователей
+        /// </summary>
+        public bool IsReadAll { get; set; }
     }
 
     /// <summary>
@@ -27,18 +45,18 @@ namespace ConsoleApp2
     /// </summary>
     static class ConfigManager
     {
-        public static Configuration Config { get; }
+        public static ConfigInfo Config { get; }
 
         static ConfigManager()
         {
-            Config = new Configuration();
+            Config = new ConfigInfo();
             try
             {
                 System.Xml.Serialization.XmlSerializer reader =
-        new System.Xml.Serialization.XmlSerializer(typeof(Configuration));
+                    new System.Xml.Serialization.XmlSerializer(typeof(ConfigInfo));
                 System.IO.StreamReader file = new System.IO.StreamReader(
                     Path.GetFullPath("Config.xml"));
-                Config = (Configuration)reader.Deserialize(file);
+                Config = (ConfigInfo)reader.Deserialize(file);
                 file.Close();
             }
             catch
@@ -47,12 +65,14 @@ namespace ConsoleApp2
                 Config.ApiId = 10000001;
                 Config.ApiHash = "abc";
                 Config.PhoneNumber = "+70000000001";
-                Config.Code = "10001";
-                Config.UserNameFrom = "UserFrom";
-                Config.UserNameTo = "UserTo";
+                Config.UsernameFrom = "UserFrom";
+                Config.UsernameTo = "UserTo";
+                Config.IsReadAll = true;
                 //
                 WriteConfig();
                 Console.WriteLine("Файл Config.xml создан. Заполните его данными и перезапустите программу");
+                Thread.Sleep(5000);
+                Environment.Exit(0);
             }
         }
 
@@ -62,7 +82,7 @@ namespace ConsoleApp2
         static void WriteConfig()
         {
             System.Xml.Serialization.XmlSerializer writer =
-                new System.Xml.Serialization.XmlSerializer(typeof(Configuration));
+                new System.Xml.Serialization.XmlSerializer(typeof(ConfigInfo));
 
             var path = Path.GetFullPath("Config.xml");
             System.IO.FileStream file = System.IO.File.Create(path);

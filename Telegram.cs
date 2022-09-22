@@ -4,63 +4,53 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Xml.Serialization;
 using TeleSharp.TL;
+using TeleSharp.TL.Contacts;
 using TeleSharp.TL.Messages;
 using TLSharp.Core;
-using static System.Net.Mime.MediaTypeNames;
 
 
 namespace ConsoleApp2
 {
     internal static class Telegram
     {
-        static int ApiId { get; }
+        /// <summary>
+        /// Клиент телеграма, через который происходят все действия
+        /// </summary>
+        static TelegramClient Client { get; set; }
 
-        static string ApiHash { get; }
-
-        static string PhoneNumber { get; }
-
-        static string Code { get; }
-
-        static string UsernameFrom { get; }
-
-        static string UsernameTo { get; }
-
-        public static TelegramClient Client { get; }
-
-        static TLUser UserFrom { get; set; }
-
-        static TLUser UserTo { get; set; }
-
+        /// <summary>
+        /// Для авторизации нужно
+        /// </summary>
         static string AuthHash { get; set; }
 
-        static List<TLMessage> Messages { get; set;}
+        /// <summary>
+        /// Список контактов клиента
+        /// </summary>
+        static TLContacts? Contacts { get; set; } 
+
+        /// <summary>
+        /// Диалоги клиента
+        /// </summary>
+        static TLDialogsSlice? Dialogs { get; set; }
+
+        static List<int> sendMessageIds { get; }
 
         static Telegram()
         {
-            try
-            {
-                //
-                var config = ConfigManager.Config;
-                ApiId = config.ApiId;
-                ApiHash = config.ApiHash;
-                PhoneNumber = config.PhoneNumber;
-                Code = config.Code;
-                UsernameFrom = config.UserNameFrom;
-                UsernameTo = config.UserNameTo;
-                //
-                Messages = new List<TLMessage>();
-                // Записываем адрес сессии, чтобы можно было чекнуть авторизацию
-                var store = new FileSessionStore();
-                Client = new TelegramClient(ApiId, ApiHash, store, "session");
-            }
-            catch
-            {
-                Console.WriteLine("Ошибка при создании подключения. Проверьте заполнение файла Config.");
-            }
+            sendMessageIds = new List<int>();
         }
 
-        public static async Task ConnectAsync()
+        /// <summary>
+        /// Создание сессии в Телеграме
+        /// </summary>
+        /// <param name="apiId"></param>
+        /// <param name="apiHash"></param>
+        public static async Task CreateSession(int apiId, string apiHash)
         {
+            // Записываем адрес сессии, чтобы можно было чекнуть авторизацию
+            var store = new FileSessionStore();
+            Client = new TelegramClient(apiId, apiHash, store, "session");
+            // Первичное подключение
             await Client.ConnectAsync();
         }
 
@@ -76,150 +66,211 @@ namespace ConsoleApp2
         /// <summary>
         /// Запрос кода с телефона
         /// </summary>
-        public static async Task AuthRequestAsync()
+        public static async Task AuthRequestAsync(string phoneNumber)
         {
-            AuthHash = await Client.SendCodeRequestAsync(PhoneNumber);
+            AuthHash = await Client.SendCodeRequestAsync(phoneNumber);
         }
 
         /// <summary>
         /// Авторизация по коду с телефона, требует сначала выполнения запроса на получение кода <see cref="AuthRequestAsync"/>
         /// </summary>
         /// <param name="code">Код с телефона</param>
-        public static async Task AuthAsync(string code)
+        public static async Task AuthAsync(string phoneNumber, string code)
         {
-            await Client.MakeAuthAsync(PhoneNumber, AuthHash, code);
+            await Client.MakeAuthAsync(phoneNumber, AuthHash, code);
         }
 
         /// <summary>
-        /// Устанавливает пользователя-отправителя и пользователя-реципиента из файла конфигурации.
+        /// Получает список контактов из Телеграма
         /// </summary>
-        /// <returns></returns>
-        public static async Task SetUsersAsync()
+        public static async Task RecieveContacts()
         {
-            await SetUsersAsync(UsernameFrom, UsernameTo);
+            Contacts = await Client.GetContactsAsync();
         }
 
         /// <summary>
-        /// Задает свойства <see cref="UserFrom"/> и <see cref="UserTo"/>
+        /// Возвращает Id пользователя по Username из <see cref="Contacts"/>
         /// </summary>
-        /// <param name="usernameFrom"></param>
-        /// <param name="usernameTo"></param>
-        public static async Task SetUsersAsync(string usernameFrom, string usernameTo)
+        /// <param name="username"></param>
+        public static int GetUserId(string username)
         {
-            var result = await Client.GetContactsAsync(); //overflow error?
+            if (Contacts == null) return -1;
             //
-            UserFrom = result.Users
+            var result = Contacts.Users
                 .Where(x => x.GetType() == typeof(TLUser))
-                .Cast<TLUser>()
-                .Where(x => x.Username == usernameFrom).First();
+                .Cast<TLUser>().First(x => x.Username == username);
             //
-            UserTo = result.Users
-                .Where(x => x.GetType() == typeof(TLUser))
-                .Cast<TLUser>()
-                .Where(x => x.Username == usernameTo).First();
+            return result.Id;
+        }
+
+        /// <summary>
+        /// Возвращает Username пользователя по Id из <see cref="Contacts"/>
+        /// </summary>
+        /// <param name="userId"></param>
+        public static string GetUsername(int userId)
+        {
+            //
+            try
+            {
+                var result = Contacts.Users
+                    .Where(x => x.GetType() == typeof(TLUser))
+                    .Cast<TLUser>().First(x => x.Id == userId);
+                //
+                return result.Username;
+            }
+            catch
+            {
+                return "NaN";
+            };
         }
 
         /// <summary>
         /// Отправляет сообщение
         /// </summary>
-        /// <param name="user"></param>
+        /// <param name="userId"></param>
         /// <param name="text"></param>
-        static async void SendMessageAsync(TLUser user, string text)
+        static async void SendMessageAsync(int userId, string text)
         {
-            await Client.SendMessageAsync(new TLInputPeerUser() { UserId = user.Id }, text);
+            await Client.SendMessageAsync(new TLInputPeerUser() { UserId = userId }, text);
         }
 
         /// <summary>
-        /// Получает непрочитанные сообщения от пользователя <see cref="UserFrom"/>.
+        /// Получает все диалоги клиента
         /// </summary>
         /// <returns></returns>
-        public static async Task GetUnreadMessages()
+        static async Task RecieveDialogsAsync()
         {
-            //
-            var dialogs = await Client.GetUserDialogsAsync() as TLDialogsSlice;;
-            // Получать будем сообщения от UserFrom
-            var target = new TLInputPeerUser { UserId = UserFrom.Id };
-            if (target == null)
+            Dialogs = await Client.GetUserDialogsAsync() as TLDialogsSlice;
+        }
+
+        /// <summary>
+        /// Получает непрочитанные сообщения пользователя из <see cref="Dialogs"/>.
+        /// </summary>
+        /// <remarks>
+        /// Если вы отправили пользователю сообщение после его нерпочитанных сообщений, то оно будет включено в список.
+        /// </remarks>
+        /// <param name="userId"></param>
+        /// <returns></returns>
+        public static async Task<List<Message>> GetUnreadMessagesAsync(int userId)
+        {
+            await RecieveDialogsAsync();
+            if (Dialogs == null) return new List<Message>();
+            // Количество непрочитанных сообщений в диалоге
+            var dia = Dialogs.Dialogs
+                .FirstOrDefault(x => x.UnreadCount > 0 && x.Peer is TLPeerUser user && user.UserId == userId);
+            int unreadCount;
+            if (dia == null)
             {
-                Console.WriteLine("Не найдено, от кого читать");
-                return;
+                unreadCount = 0;
             }
-            foreach (var dia in dialogs.Dialogs.Where(x => x.UnreadCount > 0))
+            else
             {
-                TLPeerUser peer = dia.Peer as TLPeerUser;
-                if (peer == null || peer.UserId != target.UserId) continue;
-                var hist = await Client.GetHistoryAsync(target, 0, -1, 0, dia.UnreadCount);
-                var some2 = (TLMessagesSlice)hist;
-                Messages.Clear();
-                foreach (TLMessage m in some2.Messages)
+                unreadCount = dia.UnreadCount;
+            };
+            return await GetMessagesAsync(userId, unreadCount);
+        }
+
+        /// <summary>
+        /// Возвращает сообщения из чата с пользователем (свои тоже) 
+        /// </summary>
+        /// <param name="userId"></param>
+        /// <param name="count"></param>
+        /// <returns></returns>
+        public static async Task<List<Message>> GetMessagesAsync(int userId, int count)
+        {
+            // Создаем список сообщений
+            var messages = new List<Message>();
+            if (count > 0)
+            {
+                // Создаем пира по Id пользователя
+                var target = new TLInputPeerUser { UserId = userId };
+                // Получаем историю сообщений
+                var hist = (TLMessagesSlice)await Client.GetHistoryAsync(target, 0, -1, 0, count);
+                //
+                foreach (TLMessage m in hist.Messages)
                 {
-                    Messages.Add(m);
+                    messages.Add(new Message(m.Id, m.Message, m.FromId));
                 }
             }
-            Console.WriteLine("Got the messages");
+            return messages;
         }
 
         /// <summary>
-        /// Получает сообщения от пользователя <see cref="UserFrom"/>.
+        /// Возвращает контейнер с непрочитанными сообщениями от разных пользователей из <see cref="Dialogs"/>
         /// </summary>
-        /// <param name="numberOfMessages">Количество сообщений на вывод</param>
         /// <returns></returns>
-        public static async Task GetMessages(int numberOfMessages)
+        public static async Task<List<UserMessages>> GetUnreadUserMessagesAsync()
         {
-            //
-            //var dialogs = await Client.GetUserDialogsAsync() as TLDialogsSlice; ;
-            // Получать будем сообщения от UserFrom
-            var target = new TLInputPeerUser { UserId = UserFrom.Id };
-            if (target == null)
+            await RecieveDialogsAsync();
+            var result = new List<UserMessages>();
+            if (Dialogs == null) return result;
+
+            // В каждом диалоге с непрочитанными сообщениями
+            foreach (var dia in Dialogs.Dialogs.Where(x => x.UnreadCount > 0))
             {
-                Console.WriteLine("Не найдено, от кого читать");
-                return;
+                var peer = dia.Peer as TLPeerUser;
+                if (peer == null) continue;
+                var username = GetUsername(peer.UserId);
+                if (username == null) username = "NaN";
+                var userMessages = new UserMessages(peer.UserId, username);
+                // Получаем непрочитанные сообщения этого диалога
+                userMessages.Messages = await GetMessagesAsync(peer.UserId, dia.UnreadCount);
+                //
+                result.Add(userMessages);
             }
-            var hist = await Client.GetHistoryAsync(target, 0, -1, 0, numberOfMessages);
-            var some2 = (TLMessagesSlice)hist;
-            Messages.Clear();
-            foreach (TLMessage m in some2.Messages)
-            {
-                Messages.Add(m);
-            }
-            Console.WriteLine("Got the messages");
+            return result;
         }
 
         /// <summary>
-        /// Вывод сообщений от <see cref="Messages"/> на консоль.
+        /// Вывод сообщений на консоль.
         /// </summary>
-        public static void ShowMessages()
+        public static void ShowUserMessages(List<UserMessages> userMessages)
         {
-            if (Messages.Count == 0)
-            {
-                Console.WriteLine("Нет сообщений для вывода на экран.");
-                return;
-            }
             string text = "";
-            foreach (var m in Messages)
+            foreach (var um in userMessages)
             {
-                text = text + "\n" + m.Message;
+                if (um.Messages.Count == 0) continue;
+                text = text + um.User.Username + ":\n";
+                foreach (var m in um.Messages)
+                {
+                    text = text + m.Text + "\n";
+                }
             }
-            // Отправить сообщения UserTo
-            Console.WriteLine("Сообщения от " + UserFrom.Username + ":\n" + text);
+            if (text != "")
+            {
+                Console.WriteLine("Сообщения:\n" + text);
+            }
+            else
+            {
+                Console.WriteLine("Нет новых сообщений");
+            }
+            
         }
 
-        public static async Task SendUnreadMessages()
+        public static async Task SendUserMessages(int userId, List<UserMessages> userMessages, string? header = "")
         {
-            //await GetUnreadMessages();
-            if (Messages.Count == 0)
-            {
-                Console.WriteLine("There is no unread messages to send.");
-                return;
-            }
             string text = "";
-            foreach (var m in Messages)
+            foreach (var um in userMessages)
             {
-                text = text + "\n" + m.Message;
+                if (um.Messages.Count == 0) continue;
+                text = text + um.User.Username + ":\n";
+                foreach (var m in um.Messages)
+                {
+                    if (sendMessageIds.Contains(m.Id)) continue;
+                    text = text + m.Text + "\n";
+                    sendMessageIds.Add(m.Id);
+                }
             }
-            // Отправить сообщения UserTo
-            await Client.SendMessageAsync(new TLInputPeerUser() { UserId = UserTo.Id }, "Непрочитанные сообщения от " + UserFrom.Username + ":\n" + text);
-            Console.WriteLine("Unread messages are sended");
+            if (text != "")
+            {
+                // Отправить сообщения UserTo
+                await Client.SendMessageAsync(new TLInputPeerUser() { UserId = userId }, header + "\n" + text);
+                Console.WriteLine("Unread messages are sended");
+            }
+            else
+            {
+                Console.WriteLine("No messages to send.");
+            }
         }
 
 

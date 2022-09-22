@@ -10,11 +10,12 @@ using TeleSharp.TL.Messages;
 using TLSharp.Core;
 
 Console.WriteLine("======================================");
-
+Console.WriteLine("Все настройки хранятся в файле Config.xml");
+var config = ConfigManager.Config;
 // Блок первичного подключения
 try
 {
-    await Telegram.ConnectAsync();
+    await Telegram.CreateSession(config.ApiId, config.ApiHash);
     Console.WriteLine("Connected.");
 }
 catch
@@ -24,10 +25,9 @@ catch
     Environment.Exit(0);
 }
 // Блок авторизации
-var isAuth = Telegram.Client.IsUserAuthorized();
-if (!isAuth)
+if (!Telegram.IsUserAuth())
 {
-    await Telegram.AuthRequestAsync();
+    await Telegram.AuthRequestAsync(config.PhoneNumber);
     Console.WriteLine("Пользователь не авторизован, отправлен код на телефон. Введите код..." + "\nq - выйти.");
     string? code = null;
     while (code is null)
@@ -37,7 +37,7 @@ if (!isAuth)
     }
     try
     {
-        await Telegram.AuthAsync(code);
+        await Telegram.AuthAsync(config.PhoneNumber, code);
         Console.WriteLine("Теперь пользователь авторизован.");
     }
     catch
@@ -51,17 +51,36 @@ else
 {
     Console.WriteLine("Authorized.");
 }
-// Получить ссылки на пользователей, указанных в конфигурации
-await Telegram.SetUsersAsync();
+// Загружаем список контактов
+await Telegram.RecieveContacts();
+// 
+var userFromId = Telegram.GetUserId(config.UsernameFrom);
+var userToId = Telegram.GetUserId(config.UsernameTo);
 //
 while (true)
 {
+    List<UserMessages> result;
+    if (config.IsReadAll)
+    {
+        // Получаем все непрочитанные сообщения от пользователей
+        result = await Telegram.GetUnreadUserMessagesAsync();
+    }
+    else 
+    {
+        // Создаем контейнер пользователя
+        result = new List<UserMessages>();
+        var some = new UserMessages(userFromId, config.UsernameFrom);
+        // Получаем непрочитанные сообщения от указанного пользователя
+        some.Messages = await Telegram.GetUnreadMessagesAsync(userFromId);
+        result.Add(some);
+    }
+  
     // Получить непрочитанные сообщения от указанного юзера
-    await Telegram.GetUnreadMessages();
+    //await Telegram.GetUnreadMessages();
     // Отправить указанному юзеру непрочитанные сообщения указанного юзера
-    await Telegram.SendUnreadMessages();
+    await Telegram.SendUserMessages(userToId, result);
     // Вывести непрочитанные сообщения в консоль
-    Telegram.ShowMessages();
+    Telegram.ShowUserMessages(result);
     //
     Console.WriteLine("---------------------------------");
     // Задержка, чтобы не спамить
