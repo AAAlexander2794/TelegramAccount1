@@ -34,10 +34,20 @@ namespace ConsoleApp2
 
         public string Username { get; }
 
-        public User(int id, string username)
+        public string FirstName { get; }
+
+        public string LastName { get; }
+
+        public string Phone { get; }
+
+        public User(int id, string firstName = "No_FirstName", string lastName = "No_LastName", 
+            string phone = "No_Phone", string username = "No_Username")
         {
             Id = id;
             Username = username;
+            FirstName = firstName;
+            LastName = lastName;
+            Phone = phone;
         }
     }
 
@@ -47,9 +57,16 @@ namespace ConsoleApp2
 
         public List<Message> Messages { get; set; }
 
-        public UserMessages(int id, string username)
+        public UserMessages(int id, string firstName = "No_FirstName", string lastName = "No_LastName", 
+            string phone = "No_Phone", string username = "No_Username")
         {
-            User = new User(id, username);
+            User = new User(id, firstName, lastName, phone, username);
+            Messages = new List<Message>();
+        }
+
+        public UserMessages(User user)
+        {
+            User = user;
             Messages = new List<Message>();
         }
     }

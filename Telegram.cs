@@ -92,36 +92,31 @@ namespace ConsoleApp2
         /// Возвращает Id пользователя по Username из <see cref="Contacts"/>
         /// </summary>
         /// <param name="username"></param>
-        public static int GetUserId(string username)
+        public static User? GetUser(string username)
         {
-            if (Contacts == null) return -1;
+            if (Contacts == null) return null;
             //
-            var result = Contacts.Users
+            var q = Contacts.Users
                 .Where(x => x.GetType() == typeof(TLUser))
                 .Cast<TLUser>().First(x => x.Username == username);
             //
-            return result.Id;
+            var user = new User(q.Id, q.FirstName, q.LastName, q.Phone, q.Username);
+            return user;
         }
 
         /// <summary>
         /// Возвращает Username пользователя по Id из <see cref="Contacts"/>
         /// </summary>
         /// <param name="userId"></param>
-        public static string GetUsername(int userId)
+        public static User? GetUser(int userId)
         {
+            if (Contacts == null) return null;
+            var q = Contacts.Users
+                .Where(x => x.GetType() == typeof(TLUser))
+                .Cast<TLUser>().First(x => x.Id == userId);
             //
-            try
-            {
-                var result = Contacts.Users
-                    .Where(x => x.GetType() == typeof(TLUser))
-                    .Cast<TLUser>().First(x => x.Id == userId);
-                //
-                return result.Username;
-            }
-            catch
-            {
-                return "NaN";
-            };
+            var user = new User(q.Id, q.FirstName, q.LastName, q.Phone, q.Username);
+            return user;
         }
 
         /// <summary>
@@ -210,9 +205,9 @@ namespace ConsoleApp2
             {
                 var peer = dia.Peer as TLPeerUser;
                 if (peer == null) continue;
-                var username = GetUsername(peer.UserId);
-                if (username == null) username = "NaN";
-                var userMessages = new UserMessages(peer.UserId, username);
+                var user = GetUser(peer.UserId);
+                if (user == null) continue;
+                var userMessages = new UserMessages(user);
                 // Получаем непрочитанные сообщения этого диалога
                 userMessages.Messages = await GetMessagesAsync(peer.UserId, dia.UnreadCount);
                 //
@@ -230,7 +225,7 @@ namespace ConsoleApp2
             foreach (var um in userMessages)
             {
                 if (um.Messages.Count == 0) continue;
-                text = text + um.User.Username + ":\n";
+                text = text + um.User.FirstName + " " + um.User.LastName + ":\n";
                 foreach (var m in um.Messages)
                 {
                     text = text + m.Text + "\n";
@@ -253,12 +248,17 @@ namespace ConsoleApp2
             foreach (var um in userMessages)
             {
                 if (um.Messages.Count == 0) continue;
-                text = text + um.User.Username + ":\n";
+                var subtext = "";
                 foreach (var m in um.Messages)
                 {
                     if (sendMessageIds.Contains(m.Id)) continue;
-                    text = text + m.Text + "\n";
+                    subtext = subtext + m.Text + "\n";
                     sendMessageIds.Add(m.Id);
+                }
+                if (subtext != "")
+                {
+                    text = text + um.User.FirstName + " " + um.User.LastName + ":\n";
+                    text = text + subtext;
                 }
             }
             if (text != "")

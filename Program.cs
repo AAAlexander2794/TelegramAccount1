@@ -54,8 +54,8 @@ else
 // Загружаем список контактов
 await Telegram.RecieveContacts();
 // 
-var userFromId = Telegram.GetUserId(config.UsernameFrom);
-var userToId = Telegram.GetUserId(config.UsernameTo);
+User userFrom = Telegram.GetUser(config.UsernameFrom);
+User userTo = Telegram.GetUser(config.UsernameTo);
 //
 while (true)
 {
@@ -69,16 +69,14 @@ while (true)
     {
         // Создаем контейнер пользователя
         result = new List<UserMessages>();
-        var some = new UserMessages(userFromId, config.UsernameFrom);
+        var some = new UserMessages(userFrom);
         // Получаем непрочитанные сообщения от указанного пользователя
-        some.Messages = await Telegram.GetUnreadMessagesAsync(userFromId);
+        some.Messages = await Telegram.GetUnreadMessagesAsync(userFrom.Id);
         result.Add(some);
     }
   
-    // Получить непрочитанные сообщения от указанного юзера
-    //await Telegram.GetUnreadMessages();
     // Отправить указанному юзеру непрочитанные сообщения указанного юзера
-    await Telegram.SendUserMessages(userToId, result);
+    await Telegram.SendUserMessages(userTo.Id, result);
     // Вывести непрочитанные сообщения в консоль
     Telegram.ShowUserMessages(result);
     //
